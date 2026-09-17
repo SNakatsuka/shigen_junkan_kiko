@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>資源循環機構 - MVP</title>
+  <title>資源循環機構 - Flow/Pressure MVP</title>
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
@@ -13,39 +13,22 @@
         <p class="eyebrow">RESOURCE CIRCULATION AUTHORITY</p>
         <h1>資源循環機構</h1>
       </div>
-
-      <section class="status-panel" aria-label="ゲーム状況">
-        <div class="status-item">
-          <span>CORE</span>
-          <strong id="coreHp">100</strong>
-        </div>
-        <div class="status-item">
-          <span>FUEL</span>
-          <strong id="fuel">0</strong>
-        </div>
-        <div class="status-item">
-          <span>OIL</span>
-          <strong id="oilCount">0</strong>
-        </div>
+      <section class="status-panel">
+        <div class="status-item"><span>CORE</span><strong id="coreHp">100</strong></div>
+        <div class="status-item"><span>FUEL</span><strong id="fuel">0.0</strong></div>
+        <div class="status-item"><span>OIL</span><strong id="oilCount">0.0</strong></div>
       </section>
     </header>
 
     <section class="game-shell">
       <div class="instructions">
         <p>
-          地盤をクリックして掘削。石油は掘られた空間を伝ってCOREへ流れます。
-          <strong>精製機</strong>に触れた石油は燃料へ変換されます。
+          地盤をクリックして掘削。石油は<strong>圧力差＋重力</strong>で坑道内を流れます。
+          精製機は一定流量まで処理できます。
         </p>
-        <div class="legend">
-          <span><i class="legend-block rock"></i>地盤</span>
-          <span><i class="legend-block tunnel"></i>坑道</span>
-          <span><i class="legend-block oil"></i>石油</span>
-          <span><i class="legend-block refinery"></i>精製機</span>
-          <span><i class="legend-block core"></i>CORE</span>
-        </div>
       </div>
 
-      <div id="grid" class="grid" aria-label="地下処理区画"></div>
+      <div id="grid" class="grid"></div>
 
       <footer class="controls">
         <button id="restartBtn" type="button">再稼働</button>
