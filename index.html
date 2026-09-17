@@ -1,39 +1,86 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="ja">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>資源循環機構 - Flow/Pressure MVP</title>
-  <link rel="stylesheet" href="style.css" />
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>資源循環機構 — 地下処理区画</title>
+  <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <main class="app">
-    <header class="topbar">
+  <main class="shell">
+    <header class="masthead panel">
       <div>
-        <p class="eyebrow">RESOURCE CIRCULATION AUTHORITY</p>
+        <p class="eyebrow">RESOURCE CIRCULATION AUTHORITY // SECTOR 07</p>
         <h1>資源循環機構</h1>
+        <p class="subtitle">地下資源処理区画・試験運転</p>
       </div>
-      <section class="status-panel">
-        <div class="status-item"><span>CORE</span><strong id="coreHp">100</strong></div>
-        <div class="status-item"><span>FUEL</span><strong id="fuel">0.0</strong></div>
-        <div class="status-item"><span>OIL</span><strong id="oilCount">0.0</strong></div>
-      </section>
+      <div class="status-lamps" aria-label="施設状態">
+        <span><i class="lamp green"></i>系統正常</span>
+        <span><i class="lamp amber"></i>油圧監視</span>
+      </div>
     </header>
 
-    <section class="game-shell">
-      <div class="instructions">
-        <p>
-          地盤をクリックして掘削。石油は<strong>圧力差＋重力</strong>で坑道内を流れます。
-          精製機は一定流量まで処理できます。
-        </p>
-      </div>
+    <section class="dashboard">
+      <aside class="panel sidebar left-panel">
+        <h2>運転状況</h2>
+        <dl class="meters">
+          <div><dt>CORE</dt><dd><span id="coreValue">100</span>%</dd></div>
+          <div class="bar"><i id="coreBar"></i></div>
+          <div><dt>燃料備蓄</dt><dd><span id="fuelValue">0.0</span> u</dd></div>
+          <div><dt>精製量</dt><dd><span id="refinedValue">0.0</span> u</dd></div>
+          <div><dt>漏油量</dt><dd><span id="leakValue">0.0</span> u</dd></div>
+          <div><dt>稼働時間</dt><dd id="timeValue">00:00</dd></div>
+        </dl>
 
-      <div id="grid" class="grid"></div>
+        <h2>作業指令</h2>
+        <div class="tools" role="toolbar" aria-label="作業ツール">
+          <button class="tool active" data-tool="dig"><kbd>1</kbd><span>掘削</span><small>岩盤を開通</small></button>
+          <button class="tool" data-tool="refinery"><kbd>2</kbd><span>精製機</span><small>燃料 4.0</small></button>
+          <button class="tool" data-tool="seal"><kbd>3</kbd><span>封鎖材</span><small>燃料 1.0</small></button>
+        </div>
+        <p class="hint">ドラッグで連続掘削。右クリックでツールを掘削へ戻します。</p>
 
-      <footer class="controls">
-        <button id="restartBtn" type="button">再稼働</button>
-        <span id="message">地盤を掘削して流路を設計してください。</span>
-      </footer>
+        <div class="controls">
+          <button id="pauseButton">一時停止</button>
+          <button id="speedButton">速度 ×1</button>
+          <button id="resetButton" class="danger">区画再生成</button>
+        </div>
+      </aside>
+
+      <section class="game-panel panel">
+        <div class="map-header">
+          <span>SECTOR MAP / 42 × 28</span>
+          <span id="modeLabel">MODE: 掘削</span>
+        </div>
+        <div class="map-wrap">
+          <div id="grid" class="grid" role="grid" aria-label="地下資源処理区画"></div>
+          <div id="message" class="message hidden" role="alert"></div>
+        </div>
+        <div class="legend">
+          <span><i class="swatch rock"></i>岩盤</span>
+          <span><i class="swatch tunnel"></i>坑道</span>
+          <span><i class="swatch oil"></i>原油</span>
+          <span><i class="swatch refinery"></i>精製機</span>
+          <span><i class="swatch core"></i>CORE</span>
+        </div>
+      </section>
+
+      <aside class="panel sidebar right-panel">
+        <h2>油田監視</h2>
+        <div id="wellList" class="well-list"></div>
+
+        <h2>処理系統</h2>
+        <ol class="process-chain">
+          <li class="online"><b>01</b><span>原油精製<small>ONLINE</small></span></li>
+          <li class="locked"><b>02</b><span>鉱石精錬<small>LOCKED</small></span></li>
+          <li class="locked"><b>03</b><span>生体分解<small>LOCKED</small></span></li>
+        </ol>
+
+        <div class="notice">
+          <strong>主任通達</strong>
+          <p>油田と精製機を坑道で接続せよ。COREへの原油流入は施設損傷を引き起こす。</p>
+        </div>
+      </aside>
     </section>
   </main>
 
