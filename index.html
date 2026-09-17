@@ -27,6 +27,7 @@
           <div><dt>CORE</dt><dd><span id="coreValue">100</span>%</dd></div>
           <div class="bar"><i id="coreBar"></i></div>
           <div><dt>燃料備蓄</dt><dd><span id="fuelValue">0.0</span> u</dd></div>
+          <div><dt>掘削電力</dt><dd><span id="powerValue">18.0</span> kE</dd></div>
           <div><dt>精製量</dt><dd><span id="refinedValue">0.0</span> u</dd></div>
           <div><dt>漏油量</dt><dd><span id="leakValue">0.0</span> u</dd></div>
           <div><dt>稼働時間</dt><dd id="timeValue">00:00</dd></div>
@@ -34,7 +35,7 @@
 
         <h2>作業指令</h2>
         <div class="tools" role="toolbar" aria-label="作業ツール">
-          <button class="tool active" data-tool="dig"><kbd>1</kbd><span>掘削</span><small>岩盤を開通</small></button>
+          <button class="tool active" data-tool="dig"><kbd>1</kbd><span>掘削</span><small>電力 0.3〜0.9</small></button>
           <button class="tool" data-tool="refinery"><kbd>2</kbd><span>精製機</span><small>燃料 4.0</small></button>
           <button class="tool" data-tool="seal"><kbd>3</kbd><span>封鎖材</span><small>燃料 1.0</small></button>
         </div>
@@ -43,6 +44,7 @@
         <div class="controls">
           <button id="pauseButton">一時停止</button>
           <button id="speedButton">速度 ×1</button>
+          <button id="generatorButton" class="wide">燃料 1.0 → 電力 6.0</button>
           <button id="resetButton" class="danger">区画再生成</button>
         </div>
       </aside>

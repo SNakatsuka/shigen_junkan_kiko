@@ -69,6 +69,8 @@ h1 { margin: 3px 0; color: #ece3bd; font-size: 30px; line-height: 1; letter-spac
 .controls button { padding: 7px 4px; border: 1px solid #4a4d3c; color: #bcb698; background: #151712; cursor: pointer; }
 .controls button:hover { border-color: #aaa477; }
 .controls .danger { grid-column: 1 / 3; color: #d6815d; }
+.controls .wide { grid-column: 1 / 3; color: #d5bd70; }
+.controls button:disabled { color: #55584a; border-color: #34362c; cursor: not-allowed; }
 
 .game-panel { padding: 8px; }
 .map-header { display: flex; justify-content: space-between; padding: 2px 3px 7px; color: #777966; font-size: 10px; letter-spacing: .12em; }

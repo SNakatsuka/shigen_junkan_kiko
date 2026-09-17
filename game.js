@@ -12,6 +12,9 @@ const CONFIG = Object.freeze({
   coreDamageRate: 2.8,
   refineryCost: 4,
   sealCost: 1,
+  initialPower: 18,
+  generatorFuelCost: 1,
+  generatorPowerGain: 6,
 });
 
 const WELL_BLUEPRINTS = [
@@ -48,6 +51,7 @@ class Game {
     this.time = 0;
     this.core = 100;
     this.fuel = 0;
+    this.power = CONFIG.initialPower;
     this.refined = 0;
     this.leaked = 0;
     this.gameOver = false;
@@ -71,9 +75,11 @@ class Game {
 
     // A small, safe starting chamber: enough to understand the system, not enough to solve it.
     this.carveRect(17, 22, 25, 25);
-    const refinery = this.at(19, 23);
+    // The central well can be connected straight down to this starter unit.
+    // Excess oil then continues toward the CORE below it.
+    const refinery = this.at(21, 22);
     refinery.type = TYPE.REFINERY;
-    for (let x = 20; x <= 22; x += 1) this.at(x, 24).type = TYPE.CORE;
+    for (let x = 20; x <= 22; x += 1) this.at(x, 25).type = TYPE.CORE;
 
     this.buildGrid();
     this.updateUI();
@@ -117,6 +123,7 @@ class Game {
       this.speed = this.speed === 1 ? 2 : 1;
       document.querySelector("#speedButton").textContent = `速度 ×${this.speed}`;
     });
+    document.querySelector("#generatorButton").addEventListener("click", () => this.generatePower());
     document.querySelector("#resetButton").addEventListener("click", () => this.reset());
     window.addEventListener("keydown", (event) => {
       if (event.key === "1") this.setTool("dig");
@@ -146,6 +153,12 @@ class Game {
   useTool(index) {
     const cell = this.cells[index];
     if (this.tool === "dig" && cell.type === TYPE.ROCK) {
+      const cost = this.digCost(cell);
+      if (this.power < cost) {
+        this.flashStatus(`電力不足 / 必要 ${cost.toFixed(2)} kE`);
+        return;
+      }
+      this.power -= cost;
       cell.type = TYPE.TUNNEL;
       this.renderCell(index, true);
     } else if (this.tool === "refinery" && cell.type === TYPE.TUNNEL && this.fuel >= CONFIG.refineryCost) {
@@ -159,6 +172,31 @@ class Game {
       this.renderCell(index, true);
     }
     this.updateUI();
+  }
+
+  digCost(cell) {
+    // Deeper layers and denser visual rock variants take more work.
+    return 0.32 + cell.y * 0.018 + cell.variant * 0.035;
+  }
+
+  generatePower() {
+    if (this.gameOver || this.fuel < CONFIG.generatorFuelCost) return;
+    this.fuel -= CONFIG.generatorFuelCost;
+    this.power += CONFIG.generatorPowerGain;
+    this.flashStatus(`補助発電 +${CONFIG.generatorPowerGain.toFixed(1)} kE`);
+    this.updateUI();
+  }
+
+  flashStatus(text) {
+    const label = document.querySelector("#modeLabel");
+    const token = String(performance.now());
+    label.dataset.flash = token;
+    label.textContent = text;
+    window.setTimeout(() => {
+      if (label.dataset.flash !== token) return;
+      const names = { dig: "掘削", refinery: "精製機", seal: "封鎖材" };
+      label.textContent = `MODE: ${names[this.tool]}`;
+    }, 1100);
   }
 
   frame(now) {
@@ -297,6 +335,8 @@ class Game {
     coreBar.style.width = `${this.core}%`;
     coreBar.style.background = this.core > 55 ? "#88a96c" : this.core > 25 ? "#d6a847" : "#c65d3e";
     document.querySelector("#fuelValue").textContent = this.fuel.toFixed(1);
+    document.querySelector("#powerValue").textContent = this.power.toFixed(1);
+    document.querySelector("#generatorButton").disabled = this.fuel < CONFIG.generatorFuelCost || this.gameOver;
     document.querySelector("#refinedValue").textContent = this.refined.toFixed(1);
     document.querySelector("#leakValue").textContent = this.leaked.toFixed(1);
     document.querySelector("#timeValue").textContent = this.formatTime(this.time);
