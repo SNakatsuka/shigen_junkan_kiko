@@ -217,8 +217,10 @@ class Game {
         const j = this.index(other.x, other.y);
         const aOil = cell.oil + delta[i];
         const bOil = other.oil + delta[j];
-        const aHead = aOil + cell.y * CONFIG.gravityHead;
-        const bHead = bOil + other.y * CONFIG.gravityHead;
+        // Screen Y grows downward. Subtracting the Y head makes an upper
+        // cell's potential higher, so equal volumes naturally flow downward.
+        const aHead = aOil - cell.y * CONFIG.gravityHead;
+        const bHead = bOil - other.y * CONFIG.gravityHead;
         let amount = (aHead - bHead) * CONFIG.conductance * dt * 10;
         amount = Math.max(-CONFIG.maxEdgeFlow, Math.min(CONFIG.maxEdgeFlow, amount));
         if (amount > 0) amount = Math.min(amount, aOil, CONFIG.capacity - bOil);
