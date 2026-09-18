@@ -33,13 +33,15 @@
           <div><dt>稼働時間</dt><dd id="timeValue">00:00</dd></div>
         </dl>
 
-        <h2>作業指令</h2>
-        <div class="tools" role="toolbar" aria-label="作業ツール">
-          <button class="tool active" data-tool="dig"><kbd>1</kbd><span>掘削</span><small>電力 0.3〜0.9</small></button>
-          <button class="tool" data-tool="refinery"><kbd>2</kbd><span>精製機</span><small>燃料 4.0</small></button>
-          <button class="tool" data-tool="seal"><kbd>3</kbd><span>封鎖材</span><small>燃料 1.0</small></button>
+        <h2>作業員操作</h2>
+        <div class="key-guide" aria-label="キーボード操作">
+          <div><kbd>↑↓←→</kbd><span>移動・方向転換</span></div>
+          <div><kbd>D</kbd><span>正面を掘削<small>電力 0.3〜0.9</small></span></div>
+          <div><kbd>R</kbd><span>正面に精製機<small>燃料 4.0</small></span></div>
+          <div><kbd>S</kbd><span>正面を封鎖<small>燃料 1.0</small></span></div>
+          <div><kbd>G</kbd><span>補助発電<small>燃料 1.0 → 電力 6.0</small></span></div>
         </div>
-        <p class="hint">ドラッグで連続掘削。右クリックでツールを掘削へ戻します。</p>
+        <p class="hint">作業員は坑道内だけ移動できます。基地から坑道を延ばして油田へ接続してください。</p>
 
         <div class="controls">
           <button id="pauseButton">一時停止</button>
@@ -52,7 +54,7 @@
       <section class="game-panel panel">
         <div class="map-header">
           <span>SECTOR MAP / 42 × 28</span>
-          <span id="modeLabel">MODE: 掘削</span>
+          <span id="modeLabel">OPERATOR: 待機</span>
         </div>
         <div class="map-wrap">
           <div id="grid" class="grid" role="grid" aria-label="地下資源処理区画"></div>

@@ -29,8 +29,6 @@ class Game {
   constructor() {
     this.gridEl = document.querySelector("#grid");
     this.messageEl = document.querySelector("#message");
-    this.tool = "dig";
-    this.dragging = false;
     this.paused = false;
     this.speed = 1;
     this.lastFrame = performance.now();
@@ -57,6 +55,9 @@ class Game {
     this.gameOver = false;
     this.paused = false;
     this.speed = 1;
+    this.player = { x: 21, y: 24, dir: "up" };
+    const operatorLabel = document.querySelector("#modeLabel");
+    if (operatorLabel) delete operatorLabel.dataset.flash;
     this.cells = Array.from({ length: CONFIG.cols * CONFIG.rows }, (_, i) => ({
       x: i % CONFIG.cols,
       y: Math.floor(i / CONFIG.cols),
@@ -101,19 +102,16 @@ class Game {
       el.className = `cell ${cell.type} variant-${cell.variant}`;
       el.dataset.index = String(i);
       el.setAttribute("role", "gridcell");
-      el.addEventListener("pointerdown", (event) => this.pointerDown(event, i));
-      el.addEventListener("pointerenter", () => this.pointerEnter(i));
-      el.addEventListener("contextmenu", (event) => { event.preventDefault(); this.setTool("dig"); });
       fragment.append(el);
       this.els.push(el);
     });
     this.gridEl.append(fragment);
+    this.playerEl = document.createElement("span");
+    this.playerEl.setAttribute("aria-label", "作業員");
     this.render(true);
   }
 
   bindUI() {
-    window.addEventListener("pointerup", () => { this.dragging = false; });
-    document.querySelectorAll(".tool").forEach((button) => button.addEventListener("click", () => this.setTool(button.dataset.tool)));
     document.querySelector("#pauseButton").addEventListener("click", () => {
       if (this.gameOver) return;
       this.paused = !this.paused;
@@ -125,52 +123,98 @@ class Game {
     });
     document.querySelector("#generatorButton").addEventListener("click", () => this.generatePower());
     document.querySelector("#resetButton").addEventListener("click", () => this.reset());
-    window.addEventListener("keydown", (event) => {
-      if (event.key === "1") this.setTool("dig");
-      if (event.key === "2") this.setTool("refinery");
-      if (event.key === "3") this.setTool("seal");
-      if (event.code === "Space") { event.preventDefault(); document.querySelector("#pauseButton").click(); }
-    });
+    window.addEventListener("keydown", (event) => this.handleKey(event));
   }
 
-  setTool(tool) {
-    this.tool = tool;
-    const labels = { dig: "掘削", refinery: "精製機", seal: "封鎖材" };
-    document.querySelectorAll(".tool").forEach((button) => button.classList.toggle("active", button.dataset.tool === tool));
-    document.querySelector("#modeLabel").textContent = `MODE: ${labels[tool]}`;
-  }
-
-  pointerDown(event, index) {
-    if (event.button !== 0 || this.gameOver) return;
-    this.dragging = true;
-    this.useTool(index);
-  }
-
-  pointerEnter(index) {
-    if (this.dragging && this.tool === "dig" && !this.gameOver) this.useTool(index);
-  }
-
-  useTool(index) {
-    const cell = this.cells[index];
-    if (this.tool === "dig" && cell.type === TYPE.ROCK) {
-      const cost = this.digCost(cell);
-      if (this.power < cost) {
-        this.flashStatus(`電力不足 / 必要 ${cost.toFixed(2)} kE`);
-        return;
-      }
-      this.power -= cost;
-      cell.type = TYPE.TUNNEL;
-      this.renderCell(index, true);
-    } else if (this.tool === "refinery" && cell.type === TYPE.TUNNEL && this.fuel >= CONFIG.refineryCost) {
-      this.fuel -= CONFIG.refineryCost;
-      cell.type = TYPE.REFINERY;
-      this.renderCell(index, true);
-    } else if (this.tool === "seal" && this.isFluidCell(cell) && cell.type !== TYPE.CORE && this.fuel >= CONFIG.sealCost) {
-      this.fuel -= CONFIG.sealCost;
-      cell.oil = 0;
-      cell.type = TYPE.SEALED;
-      this.renderCell(index, true);
+  handleKey(event) {
+    const directions = {
+      ArrowUp: [0, -1, "up"], ArrowDown: [0, 1, "down"],
+      ArrowLeft: [-1, 0, "left"], ArrowRight: [1, 0, "right"],
+    };
+    if (directions[event.key]) {
+      event.preventDefault();
+      if (!this.gameOver) this.movePlayer(...directions[event.key]);
+      return;
     }
+    const key = event.key.toLowerCase();
+    if (["d", "r", "s", "g"].includes(key) || event.code === "Space") event.preventDefault();
+    if (this.gameOver) return;
+    if (key === "d") this.digFacing();
+    if (key === "r") this.buildRefineryFacing();
+    if (key === "s") this.sealFacing();
+    if (key === "g") this.generatePower();
+    if (event.code === "Space") document.querySelector("#pauseButton").click();
+  }
+
+  directionDelta() {
+    return { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] }[this.player.dir];
+  }
+
+  facingCell() {
+    const [dx, dy] = this.directionDelta();
+    return this.at(this.player.x + dx, this.player.y + dy);
+  }
+
+  movePlayer(dx, dy, dir) {
+    this.player.dir = dir;
+    const target = this.at(this.player.x + dx, this.player.y + dy);
+    if (target && [TYPE.TUNNEL, TYPE.REFINERY].includes(target.type)) {
+      this.player.x = target.x;
+      this.player.y = target.y;
+    }
+    this.renderPlayer();
+  }
+
+  digFacing() {
+    const cell = this.facingCell();
+    if (!cell || cell.type !== TYPE.ROCK) {
+      this.flashStatus("正面に掘削可能な岩盤なし");
+      return;
+    }
+    const cost = this.digCost(cell);
+    if (this.power < cost) {
+      this.flashStatus(`電力不足 / 必要 ${cost.toFixed(2)} kE`);
+      return;
+    }
+    this.power -= cost;
+    cell.type = TYPE.TUNNEL;
+    this.renderCell(this.index(cell.x, cell.y), true);
+    this.flashStatus(`掘削完了 -${cost.toFixed(2)} kE`);
+    this.updateUI();
+  }
+
+  buildRefineryFacing() {
+    const cell = this.facingCell();
+    if (!cell || cell.type !== TYPE.TUNNEL) {
+      this.flashStatus("正面の空き坑道にのみ設置可能");
+      return;
+    }
+    if (this.fuel < CONFIG.refineryCost) {
+      this.flashStatus(`燃料不足 / 必要 ${CONFIG.refineryCost.toFixed(1)} u`);
+      return;
+    }
+    this.fuel -= CONFIG.refineryCost;
+    cell.type = TYPE.REFINERY;
+    this.renderCell(this.index(cell.x, cell.y), true);
+    this.flashStatus("精製機を設置");
+    this.updateUI();
+  }
+
+  sealFacing() {
+    const cell = this.facingCell();
+    if (!cell || cell.type !== TYPE.TUNNEL) {
+      this.flashStatus("正面の坑道のみ封鎖可能");
+      return;
+    }
+    if (this.fuel < CONFIG.sealCost) {
+      this.flashStatus(`燃料不足 / 必要 ${CONFIG.sealCost.toFixed(1)} u`);
+      return;
+    }
+    this.fuel -= CONFIG.sealCost;
+    cell.oil = 0;
+    cell.type = TYPE.SEALED;
+    this.renderCell(this.index(cell.x, cell.y), true);
+    this.flashStatus("坑道を封鎖");
     this.updateUI();
   }
 
@@ -194,8 +238,8 @@ class Game {
     label.textContent = text;
     window.setTimeout(() => {
       if (label.dataset.flash !== token) return;
-      const names = { dig: "掘削", refinery: "精製機", seal: "封鎖材" };
-      label.textContent = `MODE: ${names[this.tool]}`;
+      delete label.dataset.flash;
+      this.updateOperatorLabel();
     }, 1100);
   }
 
@@ -304,7 +348,23 @@ class Game {
 
   render(force = false) {
     this.cells.forEach((cell, i) => this.renderCell(i, force));
+    this.renderPlayer();
     this.updateUI();
+  }
+
+  renderPlayer() {
+    if (!this.playerEl) return;
+    this.playerEl.className = `operator dir-${this.player.dir}`;
+    const cellEl = this.els[this.index(this.player.x, this.player.y)];
+    if (cellEl && this.playerEl.parentElement !== cellEl) cellEl.append(this.playerEl);
+    this.updateOperatorLabel();
+  }
+
+  updateOperatorLabel() {
+    const label = document.querySelector("#modeLabel");
+    if (!label || label.dataset.flash) return;
+    const names = { up: "北", down: "南", left: "西", right: "東" };
+    label.textContent = `OPERATOR: ${this.player.x},${this.player.y} / ${names[this.player.dir]}向き`;
   }
 
   renderCell(i, force = false) {
