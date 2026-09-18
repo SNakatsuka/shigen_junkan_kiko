@@ -31,6 +31,7 @@
           <div><dt>精製量</dt><dd><span id="refinedValue">0.0</span> u</dd></div>
           <div><dt>漏油量</dt><dd><span id="leakValue">0.0</span> u</dd></div>
           <div><dt>稼働時間</dt><dd id="timeValue">00:00</dd></div>
+          <div><dt>区画SEED</dt><dd id="seedValue">000000</dd></div>
         </dl>
 
         <h2>作業員操作</h2>
@@ -73,6 +74,13 @@
         <h2>油田監視</h2>
         <div id="wellList" class="well-list"></div>
 
+        <h2>地質兆候</h2>
+        <div class="signal-legend">
+          <span><i class="sig weak"></i>微弱</span>
+          <span><i class="sig medium"></i>油徴</span>
+          <span><i class="sig strong"></i>強振</span>
+        </div>
+
         <h2>処理系統</h2>
         <ol class="process-chain">
           <li class="online"><b>01</b><span>原油精製<small>ONLINE</small></span></li>
@@ -88,6 +96,7 @@
     </section>
   </main>
 
+  <script src="world.js"></script>
   <script src="game.js"></script>
 </body>
 </html>

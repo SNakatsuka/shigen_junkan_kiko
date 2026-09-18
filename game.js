@@ -1,5 +1,9 @@
 "use strict";
 
+const { WorldGenerator } = typeof module !== "undefined" && module.exports
+  ? require("./world.js")
+  : window.WorldSystem;
+
 const CONFIG = Object.freeze({
   cols: 42,
   rows: 28,
@@ -16,12 +20,6 @@ const CONFIG = Object.freeze({
   generatorFuelCost: 1,
   generatorPowerGain: 6,
 });
-
-const WELL_BLUEPRINTS = [
-  { name: "第1油田", x: 7,  y: 3, pressure: 1.25, maxOutput: 0.048, reserve: 52, grade: "LOW" },
-  { name: "第2油田", x: 21, y: 2, pressure: 1.78, maxOutput: 0.075, reserve: 42, grade: "MID" },
-  { name: "第3油田", x: 34, y: 4, pressure: 2.35, maxOutput: 0.105, reserve: 31, grade: "HIGH" },
-];
 
 const TYPE = Object.freeze({ ROCK: "rock", TUNNEL: "tunnel", WELL: "well", REFINERY: "refinery", CORE: "core", SEALED: "sealed" });
 
@@ -56,6 +54,7 @@ class Game {
     this.paused = false;
     this.speed = 1;
     this.player = { x: 21, y: 24, dir: "up" };
+    this.seed = Math.floor(Math.random() * 1000000);
     const operatorLabel = document.querySelector("#modeLabel");
     if (operatorLabel) delete operatorLabel.dataset.flash;
     this.cells = Array.from({ length: CONFIG.cols * CONFIG.rows }, (_, i) => ({
@@ -65,12 +64,13 @@ class Game {
       oil: 0,
       variant: (i * 17 + Math.floor(i / CONFIG.cols) * 11) % 4,
       well: null,
+      hiddenWell: null,
       active: false,
     }));
-    this.wells = WELL_BLUEPRINTS.map((data) => ({ ...data, initialReserve: data.reserve, output: 0 }));
+    this.wells = WorldGenerator.generate(this.seed, CONFIG.cols);
     this.wells.forEach((well) => {
       const cell = this.at(well.x, well.y);
-      cell.type = TYPE.WELL;
+      cell.hiddenWell = well;
       cell.well = well;
     });
 
@@ -177,10 +177,26 @@ class Game {
       return;
     }
     this.power -= cost;
-    cell.type = TYPE.TUNNEL;
-    this.renderCell(this.index(cell.x, cell.y), true);
-    this.flashStatus(`掘削完了 -${cost.toFixed(2)} kE`);
+    if (cell.hiddenWell) {
+      this.discoverWell(cell);
+    } else {
+      cell.type = TYPE.TUNNEL;
+      this.renderCell(this.index(cell.x, cell.y), true);
+      this.flashStatus(`掘削完了 -${cost.toFixed(2)} kE`);
+    }
     this.updateUI();
+  }
+
+  discoverWell(cell) {
+    const well = cell.hiddenWell;
+    well.discovered = true;
+    cell.type = TYPE.WELL;
+    const blowout = Math.min(well.reserve, 0.16 * well.pressure);
+    const playerCell = this.at(this.player.x, this.player.y);
+    playerCell.oil = Math.min(CONFIG.capacity, playerCell.oil + blowout);
+    well.reserve -= blowout;
+    this.flashStatus(`${well.name}を発見 / 圧力 ${well.pressure.toFixed(2)}`);
+    this.render(true);
   }
 
   buildRefineryFacing() {
@@ -272,7 +288,7 @@ class Game {
   injectFromWells(dt) {
     for (const well of this.wells) {
       well.output = 0;
-      if (well.reserve <= 0) continue;
+      if (!well.discovered || well.reserve <= 0) continue;
       const neighbors = this.neighbors(well.x, well.y).filter((cell) => this.isFluidCell(cell));
       if (!neighbors.length) continue;
       neighbors.sort((a, b) => a.oil - b.oil);
@@ -372,18 +388,23 @@ class Game {
     const el = this.els[i];
     if (!el) return;
     const oilBand = Math.round(cell.oil * 20);
-    const signature = `${cell.type}:${oilBand}:${cell.active}`;
+    const signal = [TYPE.TUNNEL, TYPE.REFINERY].includes(cell.type)
+      ? WorldGenerator.signalAt(this.wells, cell.x, cell.y)
+      : 0;
+    const signature = `${cell.type}:${oilBand}:${cell.active}:${signal}`;
     if (!force && el.dataset.signature === signature) return;
     el.dataset.signature = signature;
     el.className = `cell ${cell.type} variant-${cell.variant}`;
     if (cell.type === TYPE.WELL && cell.well?.grade === "HIGH") el.classList.add("high");
     if (cell.active) el.classList.add("running");
     if (cell.oil > 0.82) el.classList.add("pressurized");
+    if (signal) el.classList.add(`signal-${signal}`);
     el.style.setProperty("--oil", String(Math.max(0, Math.min(1, cell.oil))));
     if (cell.type === TYPE.WELL) {
       el.title = `${cell.well.name}\n圧力 ${cell.well.pressure.toFixed(2)} / 埋蔵 ${cell.well.reserve.toFixed(1)}`;
     } else if (this.isFluidCell(cell)) {
-      el.title = `油量 ${cell.oil.toFixed(2)} / 1.00`;
+      const signalNames = ["兆候なし", "微弱な油臭", "油徴あり", "強い圧力振動"];
+      el.title = `油量 ${cell.oil.toFixed(2)} / 1.00\n地質: ${signalNames[signal]}`;
     } else {
       el.title = cell.type === TYPE.ROCK ? "岩盤：掘削可能" : "封鎖済み";
     }
@@ -400,12 +421,13 @@ class Game {
     document.querySelector("#refinedValue").textContent = this.refined.toFixed(1);
     document.querySelector("#leakValue").textContent = this.leaked.toFixed(1);
     document.querySelector("#timeValue").textContent = this.formatTime(this.time);
+    document.querySelector("#seedValue").textContent = String(this.seed).padStart(6, "0");
     document.querySelector("#wellList").innerHTML = this.wells.map((well) => `
-      <article class="well-card">
+      ${well.discovered ? `<article class="well-card">
         <header><span>${well.name}</span><em>${well.grade} PRESSURE</em></header>
         <dl><dt>圧力</dt><dd>${well.pressure.toFixed(2)}</dd><dt>瞬間流量</dt><dd>${well.output.toFixed(2)}</dd><dt>埋蔵量</dt><dd>${well.reserve.toFixed(1)} u</dd></dl>
         <div class="reserve"><i style="width:${Math.max(0, well.reserve / well.initialReserve * 100)}%"></i></div>
-      </article>`).join("");
+      </article>` : `<article class="well-card unknown"><header><span>未確認資源</span><em>NO DATA</em></header><p>坑道の地質兆候を追跡せよ</p></article>`}`).join("");
   }
 
   formatTime(seconds) {
@@ -416,7 +438,7 @@ class Game {
 }
 
 if (typeof module !== "undefined" && module.exports) {
-  module.exports = { Game, CONFIG, WELL_BLUEPRINTS, TYPE };
+  module.exports = { Game, CONFIG, TYPE };
 } else {
   new Game();
 }
