@@ -3,6 +3,9 @@
 const { WorldGenerator } = typeof module !== "undefined" && module.exports
   ? require("./world.js")
   : window.WorldSystem;
+const { IndustrySystem, INDUSTRY_RULES } = typeof module !== "undefined" && module.exports
+  ? require("./industry.js")
+  : window.IndustryModule;
 
 const CONFIG = Object.freeze({
   cols: 42,
@@ -21,10 +24,11 @@ const CONFIG = Object.freeze({
   generatorPowerGain: 6,
 });
 
-const TYPE = Object.freeze({ ROCK: "rock", TUNNEL: "tunnel", WELL: "well", REFINERY: "refinery", CORE: "core", SEALED: "sealed" });
+const TYPE = Object.freeze({ ROCK: "rock", TUNNEL: "tunnel", WELL: "well", ORE: "ore", REFINERY: "refinery", SMELTER: "smelter", CORE: "core", SEALED: "sealed" });
 
 class Game {
   constructor() {
+    this.config = CONFIG;
     this.gridEl = document.querySelector("#grid");
     this.messageEl = document.querySelector("#message");
     this.paused = false;
@@ -50,6 +54,9 @@ class Game {
     this.power = CONFIG.initialPower;
     this.refined = 0;
     this.leaked = 0;
+    this.oreCargo = 0;
+    this.metal = 0;
+    this.catalyst = 0;
     this.gameOver = false;
     this.paused = false;
     this.speed = 1;
@@ -65,6 +72,10 @@ class Game {
       variant: (i * 17 + Math.floor(i / CONFIG.cols) * 11) % 4,
       well: null,
       hiddenWell: null,
+      ore: null,
+      hiddenOre: null,
+      oreBuffer: 0,
+      process: 0,
       active: false,
     }));
     this.wells = WorldGenerator.generate(this.seed, CONFIG.cols);
@@ -72,6 +83,12 @@ class Game {
       const cell = this.at(well.x, well.y);
       cell.hiddenWell = well;
       cell.well = well;
+    });
+    this.ores = WorldGenerator.generateOres(this.seed, CONFIG.cols, this.wells);
+    this.ores.forEach((ore) => {
+      const cell = this.at(ore.x, ore.y);
+      cell.hiddenOre = ore;
+      cell.ore = ore;
     });
 
     // A small, safe starting chamber: enough to understand the system, not enough to solve it.
@@ -137,10 +154,12 @@ class Game {
       return;
     }
     const key = event.key.toLowerCase();
-    if (["d", "r", "s", "g"].includes(key) || event.code === "Space") event.preventDefault();
+    if (["d", "r", "m", "e", "s", "g"].includes(key) || event.code === "Space") event.preventDefault();
     if (this.gameOver) return;
     if (key === "d") this.digFacing();
     if (key === "r") this.buildRefineryFacing();
+    if (key === "m") this.buildSmelterFacing();
+    if (key === "e") this.unloadOreFacing();
     if (key === "s") this.sealFacing();
     if (key === "g") this.generatePower();
     if (event.code === "Space") document.querySelector("#pauseButton").click();
@@ -167,6 +186,10 @@ class Game {
 
   digFacing() {
     const cell = this.facingCell();
+    if (cell?.type === TYPE.ORE) {
+      this.mineOre(cell);
+      return;
+    }
     if (!cell || cell.type !== TYPE.ROCK) {
       this.flashStatus("正面に掘削可能な岩盤なし");
       return;
@@ -179,12 +202,41 @@ class Game {
     this.power -= cost;
     if (cell.hiddenWell) {
       this.discoverWell(cell);
+    } else if (cell.hiddenOre) {
+      this.discoverOre(cell);
     } else {
       cell.type = TYPE.TUNNEL;
       this.renderCell(this.index(cell.x, cell.y), true);
       this.flashStatus(`掘削完了 -${cost.toFixed(2)} kE`);
     }
     this.updateUI();
+  }
+
+  discoverOre(cell) {
+    cell.ore.discovered = true;
+    cell.type = TYPE.ORE;
+    this.flashStatus(`${cell.ore.name}を発見 / Dで採掘`);
+    this.render(true);
+  }
+
+  mineOre(cell) {
+    if (this.oreCargo >= INDUSTRY_RULES.cargoCapacity) {
+      this.flashStatus("運搬容量上限 / 精錬機へ搬入せよ");
+      return;
+    }
+    if (this.power < INDUSTRY_RULES.oreMiningPower) {
+      this.flashStatus(`採掘電力不足 / 必要 ${INDUSTRY_RULES.oreMiningPower.toFixed(2)} kE`);
+      return;
+    }
+    this.power -= INDUSTRY_RULES.oreMiningPower;
+    this.oreCargo += 1;
+    cell.ore.reserve -= 1;
+    if (cell.ore.reserve <= 0) {
+      cell.type = TYPE.TUNNEL;
+      cell.hiddenOre = null;
+    }
+    this.flashStatus(`鉱石採掘 ${this.oreCargo}/${INDUSTRY_RULES.cargoCapacity}`);
+    this.render(true);
   }
 
   discoverWell(cell) {
@@ -213,6 +265,38 @@ class Game {
     cell.type = TYPE.REFINERY;
     this.renderCell(this.index(cell.x, cell.y), true);
     this.flashStatus("精製機を設置");
+    this.updateUI();
+  }
+
+  buildSmelterFacing() {
+    const cell = this.facingCell();
+    if (!cell || cell.type !== TYPE.TUNNEL) {
+      this.flashStatus("正面の空き坑道にのみ設置可能");
+      return;
+    }
+    if (this.fuel < INDUSTRY_RULES.smelterCost) {
+      this.flashStatus(`燃料不足 / 必要 ${INDUSTRY_RULES.smelterCost.toFixed(1)} u`);
+      return;
+    }
+    this.fuel -= INDUSTRY_RULES.smelterCost;
+    cell.type = TYPE.SMELTER;
+    this.flashStatus("鉱石精錬機を設置");
+    this.render(true);
+  }
+
+  unloadOreFacing() {
+    const cell = this.facingCell();
+    if (!cell || cell.type !== TYPE.SMELTER) {
+      this.flashStatus("正面に精錬機なし");
+      return;
+    }
+    if (this.oreCargo <= 0) {
+      this.flashStatus("運搬鉱石なし");
+      return;
+    }
+    cell.oreBuffer += this.oreCargo;
+    this.flashStatus(`鉱石 ${this.oreCargo} を搬入`);
+    this.oreCargo = 0;
     this.updateUI();
   }
 
@@ -280,7 +364,7 @@ class Game {
     this.time += dt;
     this.injectFromWells(dt);
     this.flow(dt);
-    this.runRefineries(dt);
+    IndustrySystem.update(this, dt);
     this.damageCore(dt);
     if (this.core <= 0) this.endGame();
   }
@@ -332,18 +416,6 @@ class Game {
     });
   }
 
-  runRefineries(dt) {
-    for (const cell of this.cells) {
-      cell.active = false;
-      if (cell.type !== TYPE.REFINERY || cell.oil <= 0) continue;
-      const amount = Math.min(cell.oil, CONFIG.refineryRate * dt * 10);
-      cell.oil -= amount;
-      this.fuel += amount;
-      this.refined += amount;
-      cell.active = amount > 0.0001;
-    }
-  }
-
   damageCore(dt) {
     for (const cell of this.cells) {
       if (cell.type !== TYPE.CORE || cell.oil <= 0) continue;
@@ -391,7 +463,10 @@ class Game {
     const signal = [TYPE.TUNNEL, TYPE.REFINERY].includes(cell.type)
       ? WorldGenerator.signalAt(this.wells, cell.x, cell.y)
       : 0;
-    const signature = `${cell.type}:${oilBand}:${cell.active}:${signal}`;
+    const mineralSignal = [TYPE.TUNNEL, TYPE.REFINERY].includes(cell.type)
+      ? WorldGenerator.mineralSignalAt(this.ores, cell.x, cell.y)
+      : 0;
+    const signature = `${cell.type}:${oilBand}:${cell.active}:${signal}:${mineralSignal}:${cell.oreBuffer}`;
     if (!force && el.dataset.signature === signature) return;
     el.dataset.signature = signature;
     el.className = `cell ${cell.type} variant-${cell.variant}`;
@@ -399,12 +474,18 @@ class Game {
     if (cell.active) el.classList.add("running");
     if (cell.oil > 0.82) el.classList.add("pressurized");
     if (signal) el.classList.add(`signal-${signal}`);
+    if (mineralSignal) el.classList.add(`mineral-${mineralSignal}`);
     el.style.setProperty("--oil", String(Math.max(0, Math.min(1, cell.oil))));
     if (cell.type === TYPE.WELL) {
       el.title = `${cell.well.name}\n圧力 ${cell.well.pressure.toFixed(2)} / 埋蔵 ${cell.well.reserve.toFixed(1)}`;
+    } else if (cell.type === TYPE.ORE) {
+      el.title = `${cell.ore.name}\n残存鉱石 ${cell.ore.reserve}`;
+    } else if (cell.type === TYPE.SMELTER) {
+      el.title = `鉱石精錬機\n投入 ${cell.oreBuffer} / 処理 ${cell.process.toFixed(1)}秒`;
     } else if (this.isFluidCell(cell)) {
       const signalNames = ["兆候なし", "微弱な油臭", "油徴あり", "強い圧力振動"];
-      el.title = `油量 ${cell.oil.toFixed(2)} / 1.00\n地質: ${signalNames[signal]}`;
+      const mineralNames = ["なし", "微弱", "鉱物反応", "強い鉱物反応"];
+      el.title = `油量 ${cell.oil.toFixed(2)} / 1.00\n油徴: ${signalNames[signal]}\n鉱物: ${mineralNames[mineralSignal]}`;
     } else {
       el.title = cell.type === TYPE.ROCK ? "岩盤：掘削可能" : "封鎖済み";
     }
@@ -417,6 +498,9 @@ class Game {
     coreBar.style.background = this.core > 55 ? "#88a96c" : this.core > 25 ? "#d6a847" : "#c65d3e";
     document.querySelector("#fuelValue").textContent = this.fuel.toFixed(1);
     document.querySelector("#powerValue").textContent = this.power.toFixed(1);
+    document.querySelector("#cargoValue").textContent = String(this.oreCargo);
+    document.querySelector("#metalValue").textContent = this.metal.toFixed(1);
+    document.querySelector("#catalystValue").textContent = this.catalyst.toFixed(1);
     document.querySelector("#generatorButton").disabled = this.fuel < CONFIG.generatorFuelCost || this.gameOver;
     document.querySelector("#refinedValue").textContent = this.refined.toFixed(1);
     document.querySelector("#leakValue").textContent = this.leaked.toFixed(1);
@@ -428,6 +512,12 @@ class Game {
         <dl><dt>圧力</dt><dd>${well.pressure.toFixed(2)}</dd><dt>瞬間流量</dt><dd>${well.output.toFixed(2)}</dd><dt>埋蔵量</dt><dd>${well.reserve.toFixed(1)} u</dd></dl>
         <div class="reserve"><i style="width:${Math.max(0, well.reserve / well.initialReserve * 100)}%"></i></div>
       </article>` : `<article class="well-card unknown"><header><span>未確認資源</span><em>NO DATA</em></header><p>坑道の地質兆候を追跡せよ</p></article>`}`).join("");
+    document.querySelector("#oreList").innerHTML = this.ores.map((ore) => ore.discovered
+      ? `<article class="well-card"><header><span>${ore.name}</span><em>ORE</em></header><dl><dt>残存量</dt><dd>${ore.reserve}</dd></dl><div class="reserve"><i style="width:${Math.max(0, ore.reserve / ore.initialReserve * 100)}%;background:#78979d"></i></div></article>`
+      : `<article class="well-card unknown"><header><span>未確認鉱床</span><em>NO DATA</em></header></article>`).join("");
+    const oreProcess = document.querySelector("#oreProcess");
+    oreProcess.className = this.refined > 0 ? "online" : "locked";
+    oreProcess.querySelector("small").textContent = this.refined > 0 ? "ONLINE" : "NO FUEL";
   }
 
   formatTime(seconds) {

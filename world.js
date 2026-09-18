@@ -69,6 +69,31 @@
       return wells;
     }
 
+    static generateOres(seed, cols, wells) {
+      const rng = new SeededRandom((seed ^ 0x9e3779b9) >>> 0);
+      const zones = [
+        { name: "第1鉱脈", x: [9, 33], y: [11, 18], reserve: [9, 13] },
+        { name: "第2鉱脈", x: [4, 38], y: [4, 11], reserve: [7, 11] },
+      ];
+      const ores = [];
+      for (const zone of zones) {
+        let x;
+        let y;
+        let attempts = 0;
+        do {
+          x = rng.int(zone.x[0], zone.x[1]);
+          y = rng.int(zone.y[0], zone.y[1]);
+          attempts += 1;
+        } while (attempts < 100 && (
+          wells.some((well) => Math.abs(well.x - x) + Math.abs(well.y - y) < 4) ||
+          ores.some((ore) => Math.abs(ore.x - x) + Math.abs(ore.y - y) < 7)
+        ));
+        const reserve = rng.int(zone.reserve[0], zone.reserve[1]);
+        ores.push({ name: zone.name, x, y, reserve, initialReserve: reserve, discovered: false });
+      }
+      return ores;
+    }
+
     static signalAt(wells, x, y) {
       let distance = Infinity;
       for (const well of wells) {
@@ -78,6 +103,18 @@
       if (distance <= 2) return 3;
       if (distance <= 5) return 2;
       if (distance <= 8) return 1;
+      return 0;
+    }
+
+    static mineralSignalAt(ores, x, y) {
+      let distance = Infinity;
+      for (const ore of ores) {
+        if (ore.discovered && ore.reserve <= 0) continue;
+        distance = Math.min(distance, Math.abs(ore.x - x) + Math.abs(ore.y - y));
+      }
+      if (distance <= 2) return 3;
+      if (distance <= 4) return 2;
+      if (distance <= 7) return 1;
       return 0;
     }
 

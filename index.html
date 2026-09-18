@@ -28,6 +28,9 @@
           <div class="bar"><i id="coreBar"></i></div>
           <div><dt>燃料備蓄</dt><dd><span id="fuelValue">0.0</span> u</dd></div>
           <div><dt>掘削電力</dt><dd><span id="powerValue">18.0</span> kE</dd></div>
+          <div><dt>運搬鉱石</dt><dd><span id="cargoValue">0</span> / 4</dd></div>
+          <div><dt>金属</dt><dd><span id="metalValue">0.0</span> u</dd></div>
+          <div><dt>触媒</dt><dd><span id="catalystValue">0.0</span> u</dd></div>
           <div><dt>精製量</dt><dd><span id="refinedValue">0.0</span> u</dd></div>
           <div><dt>漏油量</dt><dd><span id="leakValue">0.0</span> u</dd></div>
           <div><dt>稼働時間</dt><dd id="timeValue">00:00</dd></div>
@@ -39,6 +42,8 @@
           <div><kbd>↑↓←→</kbd><span>移動・方向転換</span></div>
           <div><kbd>D</kbd><span>正面を掘削<small>電力 0.3〜0.9</small></span></div>
           <div><kbd>R</kbd><span>正面に精製機<small>燃料 4.0</small></span></div>
+          <div><kbd>M</kbd><span>正面に精錬機<small>燃料 6.0</small></span></div>
+          <div><kbd>E</kbd><span>鉱石を精錬機へ搬入</span></div>
           <div><kbd>S</kbd><span>正面を封鎖<small>燃料 1.0</small></span></div>
           <div><kbd>G</kbd><span>補助発電<small>燃料 1.0 → 電力 6.0</small></span></div>
         </div>
@@ -66,6 +71,8 @@
           <span><i class="swatch tunnel"></i>坑道</span>
           <span><i class="swatch oil"></i>原油</span>
           <span><i class="swatch refinery"></i>精製機</span>
+          <span><i class="swatch ore"></i>鉱脈</span>
+          <span><i class="swatch smelter"></i>精錬機</span>
           <span><i class="swatch core"></i>CORE</span>
         </div>
       </section>
@@ -74,17 +81,21 @@
         <h2>油田監視</h2>
         <div id="wellList" class="well-list"></div>
 
+        <h2>鉱床監視</h2>
+        <div id="oreList" class="well-list ore-list"></div>
+
         <h2>地質兆候</h2>
         <div class="signal-legend">
           <span><i class="sig weak"></i>微弱</span>
           <span><i class="sig medium"></i>油徴</span>
           <span><i class="sig strong"></i>強振</span>
+          <span><i class="sig mineral"></i>鉱物</span>
         </div>
 
         <h2>処理系統</h2>
         <ol class="process-chain">
           <li class="online"><b>01</b><span>原油精製<small>ONLINE</small></span></li>
-          <li class="locked"><b>02</b><span>鉱石精錬<small>LOCKED</small></span></li>
+          <li id="oreProcess" class="locked"><b>02</b><span>鉱石精錬<small>NO FUEL</small></span></li>
           <li class="locked"><b>03</b><span>生体分解<small>LOCKED</small></span></li>
         </ol>
 
@@ -97,6 +108,7 @@
   </main>
 
   <script src="world.js"></script>
+  <script src="industry.js"></script>
   <script src="game.js"></script>
 </body>
 </html>
