@@ -6,6 +6,9 @@ const { WorldGenerator } = typeof module !== "undefined" && module.exports
 const { IndustrySystem, INDUSTRY_RULES } = typeof module !== "undefined" && module.exports
   ? require("./industry.js")
   : window.IndustryModule;
+const { DefenseSystem, DEFENSE_RULES } = typeof module !== "undefined" && module.exports
+  ? require("./defense.js")
+  : window.DefenseModule;
 
 const CONFIG = Object.freeze({
   cols: 42,
@@ -18,13 +21,12 @@ const CONFIG = Object.freeze({
   refineryRate: 0.085,
   coreDamageRate: 2.8,
   refineryCost: 4,
-  sealCost: 1,
   initialPower: 18,
   generatorFuelCost: 1,
   generatorPowerGain: 6,
 });
 
-const TYPE = Object.freeze({ ROCK: "rock", TUNNEL: "tunnel", WELL: "well", ORE: "ore", REFINERY: "refinery", SMELTER: "smelter", CORE: "core", SEALED: "sealed" });
+const TYPE = Object.freeze({ ROCK: "rock", TUNNEL: "tunnel", WELL: "well", ORE: "ore", REFINERY: "refinery", SMELTER: "smelter", CORE: "core", BARRICADE: "barricade", BULKHEAD: "bulkhead" });
 
 class Game {
   constructor() {
@@ -76,6 +78,9 @@ class Game {
       hiddenOre: null,
       oreBuffer: 0,
       process: 0,
+      durability: 0,
+      maxDurability: 0,
+      warned: false,
       active: false,
     }));
     this.wells = WorldGenerator.generate(this.seed, CONFIG.cols);
@@ -154,13 +159,14 @@ class Game {
       return;
     }
     const key = event.key.toLowerCase();
-    if (["d", "r", "m", "e", "s", "g"].includes(key) || event.code === "Space") event.preventDefault();
+    if (["d", "r", "m", "e", "b", "s", "g"].includes(key) || event.code === "Space") event.preventDefault();
     if (this.gameOver) return;
     if (key === "d") this.digFacing();
     if (key === "r") this.buildRefineryFacing();
     if (key === "m") this.buildSmelterFacing();
     if (key === "e") this.unloadOreFacing();
-    if (key === "s") this.sealFacing();
+    if (key === "b") this.buildBarricadeFacing();
+    if (key === "s") this.buildBulkheadFacing();
     if (key === "g") this.generatePower();
     if (event.code === "Space") document.querySelector("#pauseButton").click();
   }
@@ -300,21 +306,51 @@ class Game {
     this.updateUI();
   }
 
-  sealFacing() {
-    const cell = this.facingCell();
+  canBuildBarrier(cell) {
     if (!cell || cell.type !== TYPE.TUNNEL) {
-      this.flashStatus("正面の坑道のみ封鎖可能");
+      this.flashStatus("正面の空き坑道にのみ設置可能");
+      return false;
+    }
+    if (cell.oil > DEFENSE_RULES.maxBuildOil) {
+      this.flashStatus("油圧が高く施工不能");
+      return false;
+    }
+    return true;
+  }
+
+  buildBarricadeFacing() {
+    const cell = this.facingCell();
+    if (!this.canBuildBarrier(cell)) return;
+    if (this.oreCargo < 1) {
+      this.flashStatus("携行鉱石不足 / 必要 1");
       return;
     }
-    if (this.fuel < CONFIG.sealCost) {
-      this.flashStatus(`燃料不足 / 必要 ${CONFIG.sealCost.toFixed(1)} u`);
-      return;
-    }
-    this.fuel -= CONFIG.sealCost;
+    this.oreCargo -= 1;
     cell.oil = 0;
-    cell.type = TYPE.SEALED;
+    cell.type = TYPE.BARRICADE;
+    cell.durability = DEFENSE_RULES.barricadeDurability;
+    cell.maxDurability = DEFENSE_RULES.barricadeDurability;
+    cell.warned = false;
     this.renderCell(this.index(cell.x, cell.y), true);
-    this.flashStatus("坑道を封鎖");
+    this.flashStatus("粗鉱壁を設置");
+    this.updateUI();
+  }
+
+  buildBulkheadFacing() {
+    const cell = this.facingCell();
+    if (!this.canBuildBarrier(cell)) return;
+    if (this.metal < DEFENSE_RULES.bulkheadMetalCost) {
+      this.flashStatus(`金属不足 / 必要 ${DEFENSE_RULES.bulkheadMetalCost.toFixed(1)} u`);
+      return;
+    }
+    this.metal -= DEFENSE_RULES.bulkheadMetalCost;
+    cell.oil = 0;
+    cell.type = TYPE.BULKHEAD;
+    cell.durability = DEFENSE_RULES.bulkheadDurability;
+    cell.maxDurability = DEFENSE_RULES.bulkheadDurability;
+    cell.warned = false;
+    this.renderCell(this.index(cell.x, cell.y), true);
+    this.flashStatus("強化隔壁を設置");
     this.updateUI();
   }
 
@@ -365,6 +401,7 @@ class Game {
     this.injectFromWells(dt);
     this.flow(dt);
     IndustrySystem.update(this, dt);
+    DefenseSystem.update(this, dt);
     this.damageCore(dt);
     if (this.core <= 0) this.endGame();
   }
@@ -466,7 +503,8 @@ class Game {
     const mineralSignal = [TYPE.TUNNEL, TYPE.REFINERY].includes(cell.type)
       ? WorldGenerator.mineralSignalAt(this.ores, cell.x, cell.y)
       : 0;
-    const signature = `${cell.type}:${oilBand}:${cell.active}:${signal}:${mineralSignal}:${cell.oreBuffer}`;
+    const durabilityBand = cell.maxDurability ? Math.ceil(cell.durability / cell.maxDurability * 10) : 0;
+    const signature = `${cell.type}:${oilBand}:${cell.active}:${signal}:${mineralSignal}:${cell.oreBuffer}:${durabilityBand}`;
     if (!force && el.dataset.signature === signature) return;
     el.dataset.signature = signature;
     el.className = `cell ${cell.type} variant-${cell.variant}`;
@@ -475,6 +513,8 @@ class Game {
     if (cell.oil > 0.82) el.classList.add("pressurized");
     if (signal) el.classList.add(`signal-${signal}`);
     if (mineralSignal) el.classList.add(`mineral-${mineralSignal}`);
+    if (cell.maxDurability && cell.durability / cell.maxDurability <= 0.6) el.classList.add("damaged");
+    if (cell.maxDurability && cell.durability / cell.maxDurability <= 0.25) el.classList.add("critical");
     el.style.setProperty("--oil", String(Math.max(0, Math.min(1, cell.oil))));
     if (cell.type === TYPE.WELL) {
       el.title = `${cell.well.name}\n圧力 ${cell.well.pressure.toFixed(2)} / 埋蔵 ${cell.well.reserve.toFixed(1)}`;
@@ -482,12 +522,15 @@ class Game {
       el.title = `${cell.ore.name}\n残存鉱石 ${cell.ore.reserve}`;
     } else if (cell.type === TYPE.SMELTER) {
       el.title = `鉱石精錬機\n投入 ${cell.oreBuffer} / 処理 ${cell.process.toFixed(1)}秒`;
+    } else if ([TYPE.BARRICADE, TYPE.BULKHEAD].includes(cell.type)) {
+      const name = cell.type === TYPE.BARRICADE ? "粗鉱壁" : "強化隔壁";
+      el.title = `${name}\n耐久 ${cell.durability.toFixed(1)} / ${cell.maxDurability.toFixed(1)}`;
     } else if (this.isFluidCell(cell)) {
       const signalNames = ["兆候なし", "微弱な油臭", "油徴あり", "強い圧力振動"];
       const mineralNames = ["なし", "微弱", "鉱物反応", "強い鉱物反応"];
       el.title = `油量 ${cell.oil.toFixed(2)} / 1.00\n油徴: ${signalNames[signal]}\n鉱物: ${mineralNames[mineralSignal]}`;
     } else {
-      el.title = cell.type === TYPE.ROCK ? "岩盤：掘削可能" : "封鎖済み";
+      el.title = cell.type === TYPE.ROCK ? "岩盤：掘削可能" : "通行不能";
     }
   }
 

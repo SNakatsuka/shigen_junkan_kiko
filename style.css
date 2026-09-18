@@ -161,7 +161,12 @@ h1 { margin: 3px 0; color: #ece3bd; font-size: 30px; line-height: 1; letter-spac
   box-shadow: 0 0 4px #77a66b;
   animation: pulse 1.2s steps(2) infinite;
 }
-.cell.sealed { background: repeating-linear-gradient(135deg, #77735b 0 3px, #4c4b3d 3px 6px); box-shadow: inset 0 0 0 2px #22241d; }
+.cell.barricade { background: repeating-linear-gradient(135deg, #75898b 0 3px, #45575a 3px 6px); box-shadow: inset 0 0 0 2px #242b2b; }
+.cell.barricade::before { content: ""; position: absolute; inset: 3px; border: 2px solid #9ab0b0; transform: rotate(-12deg); box-shadow: 3px 2px #344244; }
+.cell.bulkhead { background: repeating-linear-gradient(90deg, #777b75 0 5px, #4c514d 5px 7px); box-shadow: inset 0 0 0 2px #222622; }
+.cell.bulkhead::before { content: ""; position: absolute; inset: 3px; border: 2px solid #a5a992; box-shadow: inset 0 0 0 2px #4b5149; }
+.cell.damaged { filter: brightness(.75); }
+.cell.critical { animation: barrierWarning .38s steps(2) infinite; }
 
 .operator {
   position: absolute;
@@ -185,7 +190,7 @@ h1 { margin: 3px 0; color: #ece3bd; font-size: 30px; line-height: 1; letter-spac
 .legend { display: flex; gap: 16px; padding: 9px 2px 2px; color: #777966; font-size: 10px; }
 .legend span { display: flex; align-items: center; gap: 5px; }
 .swatch { width: 10px; height: 10px; border: 1px solid #555; background: #4a4330; }
-.swatch.tunnel { background: #161914; }.swatch.oil { background: #8a5425; }.swatch.refinery { background: #899078; }.swatch.core { background: #527a4d; }.swatch.ore { background: #91aeb2; }.swatch.smelter { background: #6e7370; }
+.swatch.tunnel { background: #161914; }.swatch.oil { background: #8a5425; }.swatch.refinery { background: #899078; }.swatch.core { background: #527a4d; }.swatch.ore { background: #91aeb2; }.swatch.smelter { background: #6e7370; }.swatch.barricade { background: #75898b; }.swatch.bulkhead { background: #999d91; }
 
 .well-list { display: grid; gap: 8px; margin-bottom: 20px; }
 .well-card { padding: 8px; border: 1px solid #414436; background: #171914; }
@@ -220,6 +225,7 @@ h1 { margin: 3px 0; color: #ece3bd; font-size: 30px; line-height: 1; letter-spac
 @keyframes pulse { 50% { filter: brightness(1.6); } }
 @keyframes throb { 50% { transform: translateY(1px); } }
 @keyframes signalPulse { 50% { filter: brightness(1.5); } }
+@keyframes barrierWarning { 50% { filter: brightness(1.6) saturate(1.5); } }
 
 @media (max-height: 760px) {
   :root { --cell: 17px; }
