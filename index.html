@@ -17,6 +17,7 @@
       <div class="status-lamps" aria-label="施設状態">
         <span><i class="lamp green"></i>系統正常</span>
         <span><i class="lamp amber"></i>油圧監視</span>
+        <button id="helpButton" class="help-button" aria-haspopup="dialog" aria-controls="helpDialog">HELP <kbd>?</kbd></button>
       </div>
     </header>
 
@@ -24,7 +25,7 @@
       <aside class="panel sidebar left-panel">
         <h2>運転状況</h2>
         <dl class="meters">
-          <div><dt>CORE</dt><dd><span id="coreValue">100</span>%</dd></div>
+          <div class="core-meter"><dt>CORE</dt><dd><span id="coreValue">100</span>%</dd></div>
           <div class="bar"><i id="coreBar"></i></div>
           <div><dt>燃料備蓄</dt><dd><span id="fuelValue">0.0</span> u</dd></div>
           <div><dt>掘削電力</dt><dd><span id="powerValue">18.0</span> kE</dd></div>
@@ -39,21 +40,6 @@
           <div><dt>稼働時間</dt><dd id="timeValue">00:00</dd></div>
           <div><dt>区画SEED</dt><dd id="seedValue">000000</dd></div>
         </dl>
-
-        <h2>作業員操作</h2>
-        <div class="key-guide" aria-label="キーボード操作">
-          <div><kbd>↑↓←→</kbd><span>移動・方向転換</span></div>
-          <div><kbd>D</kbd><span>正面を掘削<small>電力 0.3〜0.9</small></span></div>
-          <div><kbd>R</kbd><span>正面に精製機<small>燃料 4.0</small></span></div>
-          <div><kbd>M</kbd><span>正面に精錬機<small>燃料 6.0</small></span></div>
-          <div><kbd>E</kbd><span>鉱石を精錬機へ搬入</span></div>
-          <div><kbd>P</kbd><span>生体処理機を設置<small>燃料 10.0</small></span></div>
-          <div><kbd>Q</kbd><span>生体資源を処理機へ搬入</span></div>
-          <div><kbd>B</kbd><span>粗鉱壁を設置<small>携行鉱石 1</small></span></div>
-          <div><kbd>S</kbd><span>強化隔壁を設置<small>金属 1.0</small></span></div>
-          <div><kbd>G</kbd><span>補助発電<small>燃料 1.0 → 電力 6.0</small></span></div>
-        </div>
-        <p class="hint">作業員は坑道内だけ移動できます。基地から坑道を延ばして油田へ接続してください。</p>
 
         <div class="controls">
           <button id="pauseButton">一時停止</button>
@@ -88,7 +74,40 @@
         </div>
       </section>
 
-      <aside class="panel sidebar right-panel">
+    </section>
+  </main>
+
+  <dialog id="helpDialog" class="help-dialog" aria-labelledby="helpTitle">
+    <header class="help-header">
+      <div>
+        <p class="eyebrow">FIELD MANUAL // SECTOR 07</p>
+        <h2 id="helpTitle">作業員ヘルプ</h2>
+      </div>
+      <form method="dialog"><button class="help-close" aria-label="ヘルプを閉じる">×</button></form>
+    </header>
+    <div class="help-layout">
+      <section class="help-instructions">
+        <h3>キーボード操作</h3>
+        <div class="key-guide" aria-label="キーボード操作">
+          <div><kbd>↑↓←→</kbd><span>移動・方向転換</span></div>
+          <div><kbd>D</kbd><span>正面を掘削<small>電力 0.3〜0.9</small></span></div>
+          <div><kbd>R</kbd><span>正面に精製機<small>燃料 4.0</small></span></div>
+          <div><kbd>M</kbd><span>正面に精錬機<small>燃料 6.0</small></span></div>
+          <div><kbd>E</kbd><span>鉱石を精錬機へ搬入</span></div>
+          <div><kbd>P</kbd><span>生体処理機を設置<small>燃料 10.0</small></span></div>
+          <div><kbd>Q</kbd><span>生体資源を処理機へ搬入</span></div>
+          <div><kbd>B</kbd><span>粗鉱壁を設置<small>携行鉱石 1</small></span></div>
+          <div><kbd>S</kbd><span>強化隔壁を設置<small>金属 1.0</small></span></div>
+          <div><kbd>G</kbd><span>補助発電<small>燃料 1.0 → 電力 6.0</small></span></div>
+          <div><kbd>Space</kbd><span>一時停止／再開</span></div>
+        </div>
+        <div class="notice help-notice">
+          <strong>主任通達</strong>
+          <p>作業員は坑道内だけ移動できます。油田を発見したら、圧力がCOREへ届く前に粗鉱壁か強化隔壁で遮断してください。燃料と触媒を維持し、生体廃棄物を5 u処理すると区画制圧です。</p>
+        </div>
+      </section>
+
+      <aside class="help-intel">
         <h2>油田監視</h2>
         <div id="wellList" class="well-list"></div>
 
@@ -119,8 +138,8 @@
           <p>油田と精製機を坑道で接続せよ。COREへの原油流入は施設損傷を引き起こす。</p>
         </div>
       </aside>
-    </section>
-  </main>
+    </div>
+  </dialog>
 
   <script src="world.js"></script>
   <script src="industry.js"></script>

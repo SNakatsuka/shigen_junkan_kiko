@@ -160,10 +160,21 @@ class Game {
     document.querySelector("#generatorButton").addEventListener("click", () => this.generatePower());
     document.querySelector("#retryButton").addEventListener("click", () => this.reset(this.seed));
     document.querySelector("#resetButton").addEventListener("click", () => this.reset());
+    document.querySelector("#helpButton").addEventListener("click", () => {
+      const dialog = document.querySelector("#helpDialog");
+      if (!dialog.open) dialog.showModal();
+    });
     window.addEventListener("keydown", (event) => this.handleKey(event));
   }
 
   handleKey(event) {
+    const helpDialog = document.querySelector("#helpDialog");
+    if (helpDialog.open) return;
+    if (event.key === "?") {
+      event.preventDefault();
+      helpDialog.showModal();
+      return;
+    }
     const directions = {
       ArrowUp: [0, -1, "up"], ArrowDown: [0, 1, "down"],
       ArrowLeft: [-1, 0, "left"], ArrowRight: [1, 0, "right"],
