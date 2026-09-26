@@ -14,7 +14,7 @@
     static update(game, dt) {
       for (const cell of game.cells) {
         if (cell.type !== "barricade" && cell.type !== "bulkhead") continue;
-        const pressure = Math.max(0, ...game.neighbors(cell.x, cell.y).map((neighbor) => neighbor.oil || 0));
+        const pressure = Math.max(0, ...game.neighbors(cell.x, cell.y).map((neighbor) => (neighbor.oil || 0) + (neighbor.bio || 0) * 0.7));
         if (pressure <= 0.01) continue;
         const rate = cell.type === "barricade"
           ? DEFENSE_RULES.barricadeDamageRate

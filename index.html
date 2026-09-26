@@ -29,8 +29,11 @@
           <div><dt>燃料備蓄</dt><dd><span id="fuelValue">0.0</span> u</dd></div>
           <div><dt>掘削電力</dt><dd><span id="powerValue">18.0</span> kE</dd></div>
           <div><dt>運搬鉱石</dt><dd><span id="cargoValue">0</span> / 4</dd></div>
+          <div><dt>運搬生体</dt><dd><span id="bioCargoText">0.0</span> / 4.0 u</dd></div>
           <div><dt>金属</dt><dd><span id="metalValue">0.0</span> u</dd></div>
           <div><dt>触媒</dt><dd><span id="catalystValue">0.0</span> u</dd></div>
+          <div><dt>生体処理</dt><dd><span id="bioValue">0.0</span> u</dd></div>
+          <div><dt>制圧目標</dt><dd><span id="bioGoalText">0.0 / 5.0</span> u</dd></div>
           <div><dt>精製量</dt><dd><span id="refinedValue">0.0</span> u</dd></div>
           <div><dt>漏油量</dt><dd><span id="leakValue">0.0</span> u</dd></div>
           <div><dt>稼働時間</dt><dd id="timeValue">00:00</dd></div>
@@ -44,6 +47,8 @@
           <div><kbd>R</kbd><span>正面に精製機<small>燃料 4.0</small></span></div>
           <div><kbd>M</kbd><span>正面に精錬機<small>燃料 6.0</small></span></div>
           <div><kbd>E</kbd><span>鉱石を精錬機へ搬入</span></div>
+          <div><kbd>P</kbd><span>生体処理機を設置<small>燃料 10.0</small></span></div>
+          <div><kbd>Q</kbd><span>生体資源を処理機へ搬入</span></div>
           <div><kbd>B</kbd><span>粗鉱壁を設置<small>携行鉱石 1</small></span></div>
           <div><kbd>S</kbd><span>強化隔壁を設置<small>金属 1.0</small></span></div>
           <div><kbd>G</kbd><span>補助発電<small>燃料 1.0 → 電力 6.0</small></span></div>
@@ -54,7 +59,8 @@
           <button id="pauseButton">一時停止</button>
           <button id="speedButton">速度 ×1</button>
           <button id="generatorButton" class="wide">燃料 1.0 → 電力 6.0</button>
-          <button id="resetButton" class="danger">区画再生成</button>
+          <button id="retryButton">同区画で再挑戦</button>
+          <button id="resetButton" class="danger">新しい区画</button>
         </div>
       </aside>
 
@@ -76,6 +82,8 @@
           <span><i class="swatch smelter"></i>精錬機</span>
           <span><i class="swatch barricade"></i>粗鉱壁</span>
           <span><i class="swatch bulkhead"></i>強化隔壁</span>
+          <span><i class="swatch bio"></i>生体廃棄物</span>
+          <span><i class="swatch bioPlant"></i>生体処理機</span>
           <span><i class="swatch core"></i>CORE</span>
         </div>
       </section>
@@ -87,19 +95,23 @@
         <h2>鉱床監視</h2>
         <div id="oreList" class="well-list ore-list"></div>
 
+        <h2>生体層監視</h2>
+        <div id="bioList" class="well-list"></div>
+
         <h2>地質兆候</h2>
         <div class="signal-legend">
           <span><i class="sig weak"></i>微弱</span>
           <span><i class="sig medium"></i>油徴</span>
           <span><i class="sig strong"></i>強振</span>
           <span><i class="sig mineral"></i>鉱物</span>
+          <span><i class="sig bio"></i>生体兆候</span>
         </div>
 
         <h2>処理系統</h2>
         <ol class="process-chain">
           <li class="online"><b>01</b><span>原油精製<small>ONLINE</small></span></li>
           <li id="oreProcess" class="locked"><b>02</b><span>鉱石精錬<small>NO FUEL</small></span></li>
-          <li class="locked"><b>03</b><span>生体分解<small>LOCKED</small></span></li>
+          <li id="bioProcess" class="locked"><b>03</b><span>生体分解<small>NO CATALYST</small></span></li>
         </ol>
 
         <div class="notice">

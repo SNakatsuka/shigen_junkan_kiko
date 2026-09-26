@@ -9,6 +9,11 @@
     catalystPerOre: 0.35,
     cargoCapacity: 4,
     oreMiningPower: 0.28,
+    bioPlantCost: 10,
+    bioFuelPerUnit: 0.8,
+    bioCatalystPerUnit: 0.45,
+    bioProcessRate: 0.035,
+    bioCargoCapacity: 4,
   });
 
   class IndustrySystem {
@@ -16,6 +21,7 @@
       for (const cell of game.cells) cell.active = false;
       this.runRefineries(game, dt);
       this.runSmelters(game, dt);
+      this.runBioPlants(game, dt);
     }
 
     static runRefineries(game, dt) {
@@ -41,6 +47,27 @@
         game.fuel -= INDUSTRY_RULES.fuelPerOre;
         game.metal += INDUSTRY_RULES.metalPerOre;
         game.catalyst += INDUSTRY_RULES.catalystPerOre;
+      }
+    }
+
+    static runBioPlants(game, dt) {
+      for (const cell of game.cells) {
+        if (cell.type !== "bio-plant" || cell.bioBuffer <= 0) continue;
+        const rateAmount = INDUSTRY_RULES.bioProcessRate * dt * 10;
+        const amount = Math.min(
+          cell.bioBuffer,
+          rateAmount,
+          game.fuel / INDUSTRY_RULES.bioFuelPerUnit,
+          game.catalyst / INDUSTRY_RULES.bioCatalystPerUnit,
+        );
+        if (amount <= 0) continue;
+        const fuelCost = amount * INDUSTRY_RULES.bioFuelPerUnit;
+        const catalystCost = amount * INDUSTRY_RULES.bioCatalystPerUnit;
+        cell.bioBuffer -= amount;
+        game.fuel -= fuelCost;
+        game.catalyst -= catalystCost;
+        game.bioProcessed += amount;
+        cell.active = amount > 0.0001;
       }
     }
   }

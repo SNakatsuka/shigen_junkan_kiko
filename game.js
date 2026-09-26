@@ -24,9 +24,10 @@ const CONFIG = Object.freeze({
   initialPower: 18,
   generatorFuelCost: 1,
   generatorPowerGain: 6,
+  bioContainmentGoal: 5,
 });
 
-const TYPE = Object.freeze({ ROCK: "rock", TUNNEL: "tunnel", WELL: "well", ORE: "ore", REFINERY: "refinery", SMELTER: "smelter", CORE: "core", BARRICADE: "barricade", BULKHEAD: "bulkhead" });
+const TYPE = Object.freeze({ ROCK: "rock", TUNNEL: "tunnel", WELL: "well", ORE: "ore", BIO: "bio", REFINERY: "refinery", SMELTER: "smelter", BIO_PLANT: "bio-plant", CORE: "core", BARRICADE: "barricade", BULKHEAD: "bulkhead" });
 
 class Game {
   constructor() {
@@ -47,9 +48,9 @@ class Game {
 
   index(x, y) { return y * CONFIG.cols + x; }
   at(x, y) { return x < 0 || y < 0 || x >= CONFIG.cols || y >= CONFIG.rows ? null : this.cells[this.index(x, y)]; }
-  isFluidCell(cell) { return cell && [TYPE.TUNNEL, TYPE.REFINERY, TYPE.CORE].includes(cell.type); }
+  isFluidCell(cell) { return cell && [TYPE.TUNNEL, TYPE.REFINERY, TYPE.SMELTER, TYPE.BIO_PLANT, TYPE.CORE].includes(cell.type); }
 
-  reset() {
+  reset(seed = null) {
     this.time = 0;
     this.core = 100;
     this.fuel = 0;
@@ -59,11 +60,14 @@ class Game {
     this.oreCargo = 0;
     this.metal = 0;
     this.catalyst = 0;
+    this.bioCargo = 0;
+    this.bioProcessed = 0;
     this.gameOver = false;
+    this.won = false;
     this.paused = false;
     this.speed = 1;
     this.player = { x: 21, y: 24, dir: "up" };
-    this.seed = Math.floor(Math.random() * 1000000);
+    this.seed = Number.isInteger(seed) ? seed : Math.floor(Math.random() * 1000000);
     const operatorLabel = document.querySelector("#modeLabel");
     if (operatorLabel) delete operatorLabel.dataset.flash;
     this.cells = Array.from({ length: CONFIG.cols * CONFIG.rows }, (_, i) => ({
@@ -71,12 +75,16 @@ class Game {
       y: Math.floor(i / CONFIG.cols),
       type: TYPE.ROCK,
       oil: 0,
+      bio: 0,
       variant: (i * 17 + Math.floor(i / CONFIG.cols) * 11) % 4,
       well: null,
       hiddenWell: null,
       ore: null,
       hiddenOre: null,
+      bioSite: null,
+      hiddenBio: null,
       oreBuffer: 0,
+      bioBuffer: 0,
       process: 0,
       durability: 0,
       maxDurability: 0,
@@ -94,6 +102,12 @@ class Game {
       const cell = this.at(ore.x, ore.y);
       cell.hiddenOre = ore;
       cell.ore = ore;
+    });
+    this.bioSites = WorldGenerator.generateBio(this.seed, CONFIG.cols, this.wells, this.ores);
+    this.bioSites.forEach((site) => {
+      const cell = this.at(site.x, site.y);
+      cell.hiddenBio = site;
+      cell.bioSite = site;
     });
 
     // A small, safe starting chamber: enough to understand the system, not enough to solve it.
@@ -144,6 +158,7 @@ class Game {
       document.querySelector("#speedButton").textContent = `速度 ×${this.speed}`;
     });
     document.querySelector("#generatorButton").addEventListener("click", () => this.generatePower());
+    document.querySelector("#retryButton").addEventListener("click", () => this.reset(this.seed));
     document.querySelector("#resetButton").addEventListener("click", () => this.reset());
     window.addEventListener("keydown", (event) => this.handleKey(event));
   }
@@ -159,12 +174,14 @@ class Game {
       return;
     }
     const key = event.key.toLowerCase();
-    if (["d", "r", "m", "e", "b", "s", "g"].includes(key) || event.code === "Space") event.preventDefault();
+    if (["d", "r", "m", "e", "b", "s", "g", "p", "q"].includes(key) || event.code === "Space") event.preventDefault();
     if (this.gameOver) return;
     if (key === "d") this.digFacing();
     if (key === "r") this.buildRefineryFacing();
     if (key === "m") this.buildSmelterFacing();
     if (key === "e") this.unloadOreFacing();
+    if (key === "p") this.buildBioPlantFacing();
+    if (key === "q") this.unloadBioFacing();
     if (key === "b") this.buildBarricadeFacing();
     if (key === "s") this.buildBulkheadFacing();
     if (key === "g") this.generatePower();
@@ -183,7 +200,7 @@ class Game {
   movePlayer(dx, dy, dir) {
     this.player.dir = dir;
     const target = this.at(this.player.x + dx, this.player.y + dy);
-    if (target && [TYPE.TUNNEL, TYPE.REFINERY].includes(target.type)) {
+    if (target && [TYPE.TUNNEL, TYPE.REFINERY, TYPE.SMELTER, TYPE.BIO_PLANT].includes(target.type)) {
       this.player.x = target.x;
       this.player.y = target.y;
     }
@@ -194,6 +211,10 @@ class Game {
     const cell = this.facingCell();
     if (cell?.type === TYPE.ORE) {
       this.mineOre(cell);
+      return;
+    }
+    if (cell?.type === TYPE.BIO) {
+      this.harvestBio(cell);
       return;
     }
     if (!cell || cell.type !== TYPE.ROCK) {
@@ -210,12 +231,42 @@ class Game {
       this.discoverWell(cell);
     } else if (cell.hiddenOre) {
       this.discoverOre(cell);
+    } else if (cell.hiddenBio) {
+      this.discoverBio(cell);
     } else {
       cell.type = TYPE.TUNNEL;
       this.renderCell(this.index(cell.x, cell.y), true);
       this.flashStatus(`掘削完了 -${cost.toFixed(2)} kE`);
     }
     this.updateUI();
+  }
+
+  discoverBio(cell) {
+    const site = cell.hiddenBio;
+    site.discovered = true;
+    site.active = true;
+    cell.type = TYPE.BIO;
+    cell.bio = Math.min(0.55, site.reserve / 40);
+    site.reserve = Math.max(0, site.reserve - cell.bio);
+    this.flashStatus(`${site.name}を発見 / 拡散開始`);
+    this.render(true);
+  }
+
+  harvestBio(cell) {
+    if (this.bioCargo >= INDUSTRY_RULES.bioCargoCapacity) {
+      this.flashStatus("生体運搬容量上限 / 処理機へ搬入せよ");
+      return;
+    }
+    const available = cell.bio * 8;
+    const amount = Math.min(1, INDUSTRY_RULES.bioCargoCapacity - this.bioCargo, available);
+    if (amount <= 0) {
+      this.flashStatus("回収可能な生体資源なし");
+      return;
+    }
+    this.bioCargo += amount;
+    cell.bio = Math.max(0, cell.bio - amount / 8);
+    this.flashStatus(`生体資源を回収 ${this.bioCargo.toFixed(1)} u`);
+    this.render(true);
   }
 
   discoverOre(cell) {
@@ -303,6 +354,38 @@ class Game {
     cell.oreBuffer += this.oreCargo;
     this.flashStatus(`鉱石 ${this.oreCargo} を搬入`);
     this.oreCargo = 0;
+    this.updateUI();
+  }
+
+  buildBioPlantFacing() {
+    const cell = this.facingCell();
+    if (!cell || cell.type !== TYPE.TUNNEL) {
+      this.flashStatus("正面の空き坑道にのみ設置可能");
+      return;
+    }
+    if (this.fuel < INDUSTRY_RULES.bioPlantCost) {
+      this.flashStatus(`燃料不足 / 必要 ${INDUSTRY_RULES.bioPlantCost.toFixed(1)} u`);
+      return;
+    }
+    this.fuel -= INDUSTRY_RULES.bioPlantCost;
+    cell.type = TYPE.BIO_PLANT;
+    this.flashStatus("生体処理機を設置");
+    this.render(true);
+  }
+
+  unloadBioFacing() {
+    const cell = this.facingCell();
+    if (!cell || cell.type !== TYPE.BIO_PLANT) {
+      this.flashStatus("正面に生体処理機なし");
+      return;
+    }
+    if (this.bioCargo <= 0) {
+      this.flashStatus("運搬生体資源なし");
+      return;
+    }
+    cell.bioBuffer += this.bioCargo;
+    this.flashStatus(`生体資源 ${this.bioCargo.toFixed(1)} u を搬入`);
+    this.bioCargo = 0;
     this.updateUI();
   }
 
@@ -400,10 +483,12 @@ class Game {
     this.time += dt;
     this.injectFromWells(dt);
     this.flow(dt);
+    this.spreadBio(dt);
     IndustrySystem.update(this, dt);
     DefenseSystem.update(this, dt);
     this.damageCore(dt);
     if (this.core <= 0) this.endGame();
+    else if (this.bioProcessed >= CONFIG.bioContainmentGoal && !this.won) this.completeGame();
   }
 
   injectFromWells(dt) {
@@ -453,13 +538,43 @@ class Game {
     });
   }
 
+  spreadBio(dt) {
+    const delta = new Float32Array(this.cells.length);
+    for (const site of this.bioSites) {
+      if (!site.discovered || site.reserve <= 0 || !site.active) continue;
+      const origin = this.at(site.x, site.y);
+      if (origin.type !== TYPE.BIO) continue;
+      const amount = Math.min(Math.max(0, 0.85 - origin.bio), site.spread * dt * 10, site.reserve);
+      if (amount > 0) {
+        origin.bio += amount;
+        site.reserve -= amount;
+      }
+    }
+    for (const cell of this.cells) {
+      if (cell.bio < 0.08) continue;
+      const targets = this.neighbors(cell.x, cell.y).filter((other) => this.isFluidCell(other) && other.bio < 0.75);
+      if (!targets.length) continue;
+      const amount = Math.min(cell.bio * 0.08 * dt * 10, ...targets.map((other) => 0.75 - other.bio));
+      delta[this.index(cell.x, cell.y)] -= amount;
+      for (const target of targets) delta[this.index(target.x, target.y)] += amount / targets.length;
+    }
+    this.cells.forEach((cell, i) => { cell.bio = Math.max(0, Math.min(1, cell.bio + delta[i])); });
+  }
+
   damageCore(dt) {
     for (const cell of this.cells) {
-      if (cell.type !== TYPE.CORE || cell.oil <= 0) continue;
-      const amount = Math.min(cell.oil, 0.12 * dt * 10);
-      cell.oil -= amount;
-      this.leaked += amount;
-      this.core = Math.max(0, this.core - amount * CONFIG.coreDamageRate);
+      if (cell.type !== TYPE.CORE) continue;
+      if (cell.oil > 0) {
+        const amount = Math.min(cell.oil, 0.12 * dt * 10);
+        cell.oil -= amount;
+        this.leaked += amount;
+        this.core = Math.max(0, this.core - amount * CONFIG.coreDamageRate);
+      }
+      if (cell.bio > 0) {
+        const amount = Math.min(cell.bio, 0.05 * dt * 10);
+        cell.bio -= amount;
+        this.core = Math.max(0, this.core - amount * 1.5);
+      }
     }
   }
 
@@ -467,7 +582,15 @@ class Game {
 
   endGame() {
     this.gameOver = true;
+    this.won = false;
     this.messageEl.innerHTML = `CORE機能停止<br><small>稼働時間 ${this.formatTime(this.time)} / 精製 ${this.refined.toFixed(1)} u</small>`;
+    this.messageEl.classList.remove("hidden");
+  }
+
+  completeGame() {
+    this.gameOver = true;
+    this.won = true;
+    this.messageEl.innerHTML = `区画制圧完了<br><small>生体廃棄物 ${this.bioProcessed.toFixed(1)} u を無害化 / CORE ${this.core.toFixed(0)}%</small>`;
     this.messageEl.classList.remove("hidden");
   }
 
@@ -503,8 +626,12 @@ class Game {
     const mineralSignal = [TYPE.TUNNEL, TYPE.REFINERY].includes(cell.type)
       ? WorldGenerator.mineralSignalAt(this.ores, cell.x, cell.y)
       : 0;
+    const bioSignal = [TYPE.TUNNEL, TYPE.REFINERY, TYPE.SMELTER].includes(cell.type)
+      ? WorldGenerator.bioSignalAt(this.bioSites, cell.x, cell.y)
+      : 0;
+    const bioBand = Math.round(cell.bio * 20);
     const durabilityBand = cell.maxDurability ? Math.ceil(cell.durability / cell.maxDurability * 10) : 0;
-    const signature = `${cell.type}:${oilBand}:${cell.active}:${signal}:${mineralSignal}:${cell.oreBuffer}:${durabilityBand}`;
+    const signature = `${cell.type}:${oilBand}:${bioBand}:${cell.active}:${signal}:${mineralSignal}:${bioSignal}:${cell.oreBuffer}:${cell.bioBuffer}:${durabilityBand}`;
     if (!force && el.dataset.signature === signature) return;
     el.dataset.signature = signature;
     el.className = `cell ${cell.type} variant-${cell.variant}`;
@@ -513,15 +640,23 @@ class Game {
     if (cell.oil > 0.82) el.classList.add("pressurized");
     if (signal) el.classList.add(`signal-${signal}`);
     if (mineralSignal) el.classList.add(`mineral-${mineralSignal}`);
+    if (bioSignal) el.classList.add(`bio-signal-${bioSignal}`);
     if (cell.maxDurability && cell.durability / cell.maxDurability <= 0.6) el.classList.add("damaged");
     if (cell.maxDurability && cell.durability / cell.maxDurability <= 0.25) el.classList.add("critical");
     el.style.setProperty("--oil", String(Math.max(0, Math.min(1, cell.oil))));
+    el.style.setProperty("--bio", String(Math.max(0, Math.min(1, cell.bio))));
+    el.style.setProperty("--oil-fill", `${Math.max(0, Math.min(100, cell.oil * 100))}%`);
+    el.style.setProperty("--bio-fill", `${Math.max(0, Math.min(100, cell.bio * 100))}%`);
     if (cell.type === TYPE.WELL) {
       el.title = `${cell.well.name}\n圧力 ${cell.well.pressure.toFixed(2)} / 埋蔵 ${cell.well.reserve.toFixed(1)}`;
     } else if (cell.type === TYPE.ORE) {
       el.title = `${cell.ore.name}\n残存鉱石 ${cell.ore.reserve}`;
     } else if (cell.type === TYPE.SMELTER) {
       el.title = `鉱石精錬機\n投入 ${cell.oreBuffer} / 処理 ${cell.process.toFixed(1)}秒`;
+    } else if (cell.type === TYPE.BIO_PLANT) {
+      el.title = `生体処理機\n投入 ${cell.bioBuffer.toFixed(1)} u`;
+    } else if (cell.type === TYPE.BIO) {
+      el.title = `${cell.bioSite.name}\n生体量 ${cell.bio.toFixed(2)} / 1.00`;
     } else if ([TYPE.BARRICADE, TYPE.BULKHEAD].includes(cell.type)) {
       const name = cell.type === TYPE.BARRICADE ? "粗鉱壁" : "強化隔壁";
       el.title = `${name}\n耐久 ${cell.durability.toFixed(1)} / ${cell.maxDurability.toFixed(1)}`;
@@ -541,9 +676,11 @@ class Game {
     coreBar.style.background = this.core > 55 ? "#88a96c" : this.core > 25 ? "#d6a847" : "#c65d3e";
     document.querySelector("#fuelValue").textContent = this.fuel.toFixed(1);
     document.querySelector("#powerValue").textContent = this.power.toFixed(1);
-    document.querySelector("#cargoValue").textContent = String(this.oreCargo);
+    document.querySelector("#cargoValue").textContent = this.oreCargo.toFixed(1);
     document.querySelector("#metalValue").textContent = this.metal.toFixed(1);
     document.querySelector("#catalystValue").textContent = this.catalyst.toFixed(1);
+    document.querySelector("#bioValue").textContent = this.bioProcessed.toFixed(1);
+    document.querySelector("#bioGoalText").textContent = `${Math.min(this.bioProcessed, CONFIG.bioContainmentGoal).toFixed(1)} / ${CONFIG.bioContainmentGoal.toFixed(1)}`;
     document.querySelector("#generatorButton").disabled = this.fuel < CONFIG.generatorFuelCost || this.gameOver;
     document.querySelector("#refinedValue").textContent = this.refined.toFixed(1);
     document.querySelector("#leakValue").textContent = this.leaked.toFixed(1);
@@ -561,6 +698,14 @@ class Game {
     const oreProcess = document.querySelector("#oreProcess");
     oreProcess.className = this.refined > 0 ? "online" : "locked";
     oreProcess.querySelector("small").textContent = this.refined > 0 ? "ONLINE" : "NO FUEL";
+    document.querySelector("#bioList").innerHTML = this.bioSites.map((site) => site.discovered
+      ? `<article class="well-card"><header><span>${site.name}</span><em>${site.active ? "SPREADING" : "DORMANT"}</em></header><dl><dt>残存量</dt><dd>${site.reserve.toFixed(1)} u</dd><dt>拡散率</dt><dd>${(site.spread * 10).toFixed(2)}</dd></dl><div class="reserve"><i style="width:${Math.max(0, site.reserve / site.initialReserve * 100)}%;background:#789a4b"></i></div></article>`
+      : `<article class="well-card unknown"><header><span>未確認生体層</span><em>NO DATA</em></header></article>`).join("");
+    const bioProcess = document.querySelector("#bioProcess");
+    const bioReady = this.catalyst >= INDUSTRY_RULES.bioCatalystPerUnit && this.fuel >= INDUSTRY_RULES.bioFuelPerUnit;
+    bioProcess.className = bioReady ? "online" : "locked";
+    bioProcess.querySelector("small").textContent = bioReady ? "READY" : this.catalyst < INDUSTRY_RULES.bioCatalystPerUnit ? "NO CATALYST" : "NO FUEL";
+    document.querySelector("#bioCargoText").textContent = this.bioCargo.toFixed(1);
   }
 
   formatTime(seconds) {

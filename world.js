@@ -94,6 +94,32 @@
       return ores;
     }
 
+    static generateBio(seed, cols, wells, ores) {
+      const rng = new SeededRandom((seed ^ 0x85ebca6b) >>> 0);
+      const zones = [
+        { name: "生体廃棄物層A", x: [7, 34], y: [6, 11], reserve: [24, 32], spread: 0.018 },
+        { name: "生体廃棄物層B", x: [4, 37], y: [2, 6], reserve: [18, 26], spread: 0.027 },
+      ];
+      const sites = [];
+      for (const zone of zones) {
+        let x;
+        let y;
+        let attempts = 0;
+        do {
+          x = rng.int(zone.x[0], zone.x[1]);
+          y = rng.int(zone.y[0], zone.y[1]);
+          attempts += 1;
+        } while (attempts < 100 && (
+          wells.some((well) => Math.abs(well.x - x) + Math.abs(well.y - y) < 4) ||
+          ores.some((ore) => Math.abs(ore.x - x) + Math.abs(ore.y - y) < 4) ||
+          sites.some((site) => Math.abs(site.x - x) + Math.abs(site.y - y) < 6)
+        ));
+        const reserve = rng.int(zone.reserve[0], zone.reserve[1]);
+        sites.push({ name: zone.name, x, y, reserve, initialReserve: reserve, spread: zone.spread, discovered: false, active: false, pressure: 0 });
+      }
+      return sites;
+    }
+
     static signalAt(wells, x, y) {
       let distance = Infinity;
       for (const well of wells) {
@@ -111,6 +137,18 @@
       for (const ore of ores) {
         if (ore.discovered && ore.reserve <= 0) continue;
         distance = Math.min(distance, Math.abs(ore.x - x) + Math.abs(ore.y - y));
+      }
+      if (distance <= 2) return 3;
+      if (distance <= 4) return 2;
+      if (distance <= 7) return 1;
+      return 0;
+    }
+
+    static bioSignalAt(bioSites, x, y) {
+      let distance = Infinity;
+      for (const site of bioSites) {
+        if (site.reserve <= 0) continue;
+        distance = Math.min(distance, Math.abs(site.x - x) + Math.abs(site.y - y));
       }
       if (distance <= 2) return 3;
       if (distance <= 4) return 2;
